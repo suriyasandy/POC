@@ -1,0 +1,43 @@
+import numpy as np
+from arch import arch_model
+from sklearn.ensemble import IsolationForest
+from sklearn.svm import OneClassSVM
+from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
+
+def tune_garch(df):
+    """
+    Grid-search p,q in {(1,1),(1,2),(2,1),(2,2)} by AIC, returns best order.
+    """
+    returns = df['VolatilityOHLC'].pct_change().dropna() * 100
+    best_aic, best_order = np.inf, None
+    for p in [1,2]:
+        for q in [1,2]:
+            am = arch_model(returns, vol='Garch', p=p, q=q)
+            res = am.fit(disp='off')
+            if res.aic < best_aic:
+                best_aic, best_order = res.aic, (p,q)
+    return best_order
+
+def tune_isolation_forest(df):
+    """
+    Tunes contamination and n_estimators via time-series cross-validation.
+    """
+    X = df[['VolatilityOHLC']]
+    param_grid = {'contamination':[0.01,0.03,0.05], 'n_estimators':[50,100,200]}
+    cv = TimeSeriesSplit(n_splits=5)
+    grid = GridSearchCV(IsolationForest(random_state=42),
+                        param_grid, cv=cv, scoring='neg_mean_squared_error')
+    grid.fit(X)
+    return grid.best_params_
+
+def tune_one_class_svm(df):
+    """
+    Tunes nu and gamma via time-series cross-validation.
+    """
+    X = df[['VolatilityOHLC']]
+    param_grid = {'nu':[0.01,0.05,0.1], 'gamma':['scale','auto']}
+    cv = TimeSeriesSplit(n_splits=5)
+    grid = GridSearchCV(OneClassSVM(kernel='rbf'),
+                        param_grid, cv=cv, scoring='neg_mean_squared_error')
+    grid.fit(X)
+    return grid.best_params_
