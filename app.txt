@@ -61,6 +61,50 @@ if uploaded:
             "Lower":[lo_roll.dropna().iloc[-1],lo_g,lo_if,lo_svm,lo_rg.dropna().iloc[-1]]
         })
         st.dataframe(df_sum)
+from manual_thresholds import get_manual_bounds
+from consensus import consensus_threshold
+
+# … after thresholds_summary is built …
+
+# 1) Add Manual bounds to the table
+manual_lo, manual_up = get_manual_bounds(manual_group)
+thresholds_summary.loc[len(thresholds_summary)] = [
+    'Manual',
+    manual_up,
+    manual_lo
+]
+
+# 2) Compute consensus
+uppers = thresholds_summary['Upper Threshold'].values
+lowers = thresholds_summary['Lower Threshold'].values
+cons_up, cons_lo = consensus_threshold(uppers, lowers)
+
+# 3) Append to table
+thresholds_summary.loc[len(thresholds_summary)] = [
+    'Consensus',
+    cons_up,
+    cons_lo
+]
+
+# 4) Display updated table
+st.dataframe(thresholds_summary)
+
+# 5) Plot with consensus line
+fig = plot_thresholds(df_filtered,
+                      thresholds_summary['Upper Threshold'],
+                      thresholds_summary['Lower Threshold'])
+# Add consensus lines
+fig.add_scatter(x=df_filtered['Date'],
+                y=[cons_up]*len(df_filtered),
+                mode='lines',
+                name='Consensus Upper',
+                line=dict(color='black', dash='dot'))
+fig.add_scatter(x=df_filtered['Date'],
+                y=[cons_lo]*len(df_filtered),
+                mode='lines',
+                name='Consensus Lower',
+                line=dict(color='black', dash='dot'))
+st.plotly_chart(fig, use_container_width=True)
         st.plotly_chart(plot_thresholds(df1, up_roll, lo_roll), use_container_width=True)
         st.download_button("Download Single CSV", df_sum.to_csv(index=False), "single_thresholds.csv")
 
@@ -88,5 +132,49 @@ if uploaded:
             "Lower":[lr.dropna().iloc[-1],lg,li,ls,lgr.dropna().iloc[-1]]
         })
         st.dataframe(dfc)
-        st.plotly_chart(plot_thresholds(dc, ur, lr), use_container_width=True)
+from manual_thresholds import get_manual_bounds
+from consensus import consensus_threshold
+
+# … after thresholds_summary is built …
+
+# 1) Add Manual bounds to the table
+manual_lo, manual_up = get_manual_bounds(manual_group)
+thresholds_summary.loc[len(thresholds_summary)] = [
+    'Manual',
+    manual_up,
+    manual_lo
+]
+
+# 2) Compute consensus
+uppers = thresholds_summary['Upper Threshold'].values
+lowers = thresholds_summary['Lower Threshold'].values
+cons_up, cons_lo = consensus_threshold(uppers, lowers)
+
+# 3) Append to table
+thresholds_summary.loc[len(thresholds_summary)] = [
+    'Consensus',
+    cons_up,
+    cons_lo
+]
+
+# 4) Display updated table
+st.dataframe(thresholds_summary)
+
+# 5) Plot with consensus line
+fig = plot_thresholds(df_filtered,
+                      thresholds_summary['Upper Threshold'],
+                      thresholds_summary['Lower Threshold'])
+# Add consensus lines
+fig.add_scatter(x=df_filtered['Date'],
+                y=[cons_up]*len(df_filtered),
+                mode='lines',
+                name='Consensus Upper',
+                line=dict(color='black', dash='dot'))
+fig.add_scatter(x=df_filtered['Date'],
+                y=[cons_lo]*len(df_filtered),
+                mode='lines',
+                name='Consensus Lower',
+                line=dict(color='black', dash='dot'))
+st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(plot_thresholds(dc, ur, lr), use_container_width=True)
         st.download_button("Download Cross CSV", dfc.to_csv(index=False), "cross_thresholds.csv")
