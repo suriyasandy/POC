@@ -1,0 +1,5 @@
+def calculate_synthetic_cross_volatility(base_series, quote_series):
+    """
+    Averages the two legs' volatilities.
+    """
+    return (base_series + quote_series) / 2
