@@ -1,0 +1,11 @@
+# manual_thresholds.py
+
+MANUAL_BOUNDS = {
+    'Low':    (0.00, 0.07),
+    'Medium': (0.07, 0.50),
+    'High':   (0.50, 0.60),
+    'Very High': (0.60, np.inf)
+}
+
+def get_manual_bounds(group):
+    return MANUAL_BOUNDS[group]
