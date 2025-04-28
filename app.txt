@@ -1,0 +1,92 @@
+import streamlit as st
+import pandas as pd
+
+from preprocessing import load_data
+from threshold_methods import (
+    rolling_threshold, garch_evt_threshold,
+    isolation_forest_threshold, one_class_svm_threshold,
+    regime_change_threshold
+)
+from hyperparameter_tuning import (
+    tune_garch, tune_isolation_forest, tune_one_class_svm
+)
+from cross_currency_logic import assign_manual_group, cross_currency_threshold
+from synthetic_cross import calculate_synthetic_cross_volatility
+from visualization import plot_thresholds
+
+st.set_page_config(layout="wide")
+st.title("FX Two-Sided Threshold Monitoring")
+
+# Sidebar for tuning options
+st.sidebar.header("Hyperparameter Tuning (Optional)")
+do_tune = st.sidebar.checkbox("Tune Models First")
+if do_tune:
+    st.sidebar.write("Runs cross-validation to find best model params (may take minutes).")
+
+uploaded = st.file_uploader("Upload Volatility Data CSV", type="csv")
+if uploaded:
+    df = load_data(uploaded)
+    st.success("Data loaded & interpolated!")
+
+    if do_tune:
+        with st.spinner("Tuning GARCH..."):
+            best_order = tune_garch(df); st.sidebar.write("GARCH order:", best_order)
+        with st.spinner("Tuning Isolation Forest..."):
+            best_if = tune_isolation_forest(df); st.sidebar.write("IF params:", best_if)
+        with st.spinner("Tuning One-Class SVM..."):
+            best_svm = tune_one_class_svm(df); st.sidebar.write("SVM params:", best_svm)
+    else:
+        best_order = (1,1); best_if = {'contamination':0.03,'n_estimators':100}; best_svm={'nu':0.05,'gamma':'scale'}
+
+    tab1, tab2 = st.tabs(["Single Currency", "Cross Currency"])
+
+    with tab1:
+        st.header("Single Currency Thresholds")
+        ccy = st.selectbox("Currency", df['Currency'].unique())
+        df1 = df[df['Currency']==ccy].copy()
+        mg = assign_manual_group(df1['VolatilityOHLC'].mean())
+        st.info(f"Manual Group: {mg}")
+
+        up_roll, lo_roll = rolling_threshold(df1)
+        up_g, lo_g = garch_evt_threshold(df1, p=best_order[0], q=best_order[1])
+        up_if, lo_if = isolation_forest_threshold(df1,
+                          **best_if)
+        up_svm, lo_svm = one_class_svm_threshold(df1,
+                          **best_svm)
+        up_rg, lo_rg = regime_change_threshold(df1)
+
+        df_sum = pd.DataFrame({
+            "Method":["Rolling","GARCH-EVT","IsolationForest","OneClassSVM","Regime"],
+            "Upper":[up_roll.dropna().iloc[-1],up_g,up_if,up_svm,up_rg.dropna().iloc[-1]],
+            "Lower":[lo_roll.dropna().iloc[-1],lo_g,lo_if,lo_svm,lo_rg.dropna().iloc[-1]]
+        })
+        st.dataframe(df_sum)
+        st.plotly_chart(plot_thresholds(df1, up_roll, lo_roll), use_container_width=True)
+        st.download_button("Download Single CSV", df_sum.to_csv(index=False), "single_thresholds.csv")
+
+    with tab2:
+        st.header("Cross-Currency Thresholds")
+        pairs = [("EUR","JPY"),("AUD","NZD"),("GBP","CHF"),("INR","JPY")]
+        sel = st.selectbox("Pair", [f"{b}/{q}" for b,q in pairs])
+        b,q = sel.split("/")
+        db, dq = df[df['Currency']==b].set_index('Date'), df[df['Currency']==q].set_index('Date')
+        dc = pd.DataFrame(index=db.index)
+        dc['VolatilityOHLC'] = calculate_synthetic_cross_volatility(db['VolatilityOHLC'], dq['VolatilityOHLC'])
+        mgb, mgq = assign_manual_group(db['VolatilityOHLC'].mean()), assign_manual_group(dq['VolatilityOHLC'].mean())
+        cg = cross_currency_threshold(mgb,mgq)
+        st.info(f"Cross Manual Group: {cg}")
+
+        ur, lr = rolling_threshold(dc)
+        ug, lg = garch_evt_threshold(dc, p=best_order[0], q=best_order[1])
+        ui, li = isolation_forest_threshold(dc, **best_if)
+        us, ls = one_class_svm_threshold(dc, **best_svm)
+        ugr, lgr = regime_change_threshold(dc)
+
+        dfc = pd.DataFrame({
+            "Method":["Rolling","GARCH-EVT","IsolationForest","OneClassSVM","Regime"],
+            "Upper":[ur.dropna().iloc[-1],ug,ui,us,ugr.dropna().iloc[-1]],
+            "Lower":[lr.dropna().iloc[-1],lg,li,ls,lgr.dropna().iloc[-1]]
+        })
+        st.dataframe(dfc)
+        st.plotly_chart(plot_thresholds(dc, ur, lr), use_container_width=True)
+        st.download_button("Download Cross CSV", dfc.to_csv(index=False), "cross_thresholds.csv")
