@@ -1,0 +1,8 @@
+import numpy as np
+
+def consensus_threshold(upper_values, lower_values):
+    """
+    Takes lists of upper thresholds and lower thresholds from all methods,
+    returns the median of uppers and median of lowers.
+    """
+    return np.median(upper_values), np.median(lower_values)
